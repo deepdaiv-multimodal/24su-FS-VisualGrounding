@@ -97,8 +97,8 @@ parse_commandline "$@"
 echo "Save data to: $_arg_path"
 
 
-REFERIT_SPLITS_URL="https://s3-sa-east-1.amazonaws.com/query-objseg/referit_splits.tar.bz2"
-REFERIT_DATA_URL="http://www.eecs.berkeley.edu/~ronghang/projects/cvpr16_text_obj_retrieval/referitdata.tar.gz"
+# REFERIT_SPLITS_URL="https://s3-sa-east-1.amazonaws.com/query-objseg/referit_splits.tar.bz2"
+# REFERIT_DATA_URL="http://www.eecs.berkeley.edu/~ronghang/projects/cvpr16_text_obj_retrieval/referitdata.tar.gz"
 COCO_DATA_URL="http://images.cocodataset.org/zips/train2014.zip"
 
 REFCOCO_URL="https://web.archive.org/web/20220413011718/https://bvisionweb1.cs.unc.edu/licheng/referit/data/refcoco.zip"
