@@ -1,0 +1,14 @@
+names:
+- Chachaping
+- Hachuping
+- Shashaping
+nc: 3
+roboflow:
+  license: CC BY 4.0
+  project: teenieping
+  url: https://universe.roboflow.com/jskim-bjgcb/teenieping/dataset/1
+  version: 1
+  workspace: jskim-bjgcb
+test: ../test/images
+train: Teenieping-1/train/images
+val: Teenieping-1/valid/images

@@ -5,6 +5,7 @@ from torchvision.transforms import Compose, ToTensor, Normalize
 
 import datasets.transforms as T
 from .data_loader import GroundingDataset, GroundingDatasetCLIP
+from .custom_dataloader import SupportGroundingDataset #, SupportGroundingDatasetCLIP
 
 
 def make_transforms(args, image_set, is_onestage=False):
@@ -73,4 +74,22 @@ def build_dataset(split, args):
                                 split=split,
                                 transform=make_transforms(args, split),
                                 max_query_len=args.max_query_len)
+        
+def build_support_dataset(split, args):
+    if args.model_type == "ResNet":
+        return SupportGroundingDataset(data_root=args.data_root,
+                            split_root=args.split_root,
+                            dataset=args.dataset,
+                            split=split,
+                            transform=make_transforms(args, split),
+                            max_query_len=args.max_query_len,
+                            num_templates=args.num_templates)
+    else:
+        raise NotImplementedError, "SupportGroundingDatasetCLIP is not implemented yet."
+        # return SupportGroundingDatasetCLIP(data_root=args.data_root,
+        #                         split_root=args.split_root,
+        #                         dataset=args.dataset,
+        #                         split=split,
+        #                         transform=make_transforms(args, split),
+        #                         max_query_len=args.max_query_len)
 

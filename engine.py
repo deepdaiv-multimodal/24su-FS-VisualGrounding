@@ -17,18 +17,18 @@ import utils.eval_utils as eval_utils
 from models.clip import clip
 
 from models import DynamicFSMDETR_FS_ResNet
+from datasets import SupportGroundingDataset
 
 def fs_train_one_epoch(args, 
                        model: DynamicFSMDETR_FS_ResNet, 
-                       data_loader_template: Iterable,
-                       data_loader_train: Iterable,
+                       data_loader: SupportGroundingDataset,
                        optimizer: torch.optim.Optimizer,
                        device: torch.device,
                        epoch: int,
                        max_norm: float = 0):
     model.train()
     # suppose data_loader_template is in the shape of (num_templates, 3, H, W), (num_templates,)
-    template_data, template_labels = next(iter(data_loader_template))
+    template_data, template_labels = next(iter(data_loader))
     template_data = template_data.to(device)
     template_labels = template_labels.to(device)
     template_labels = template_labels.unsqueeze(1)

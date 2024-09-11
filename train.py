@@ -121,6 +121,8 @@ def get_args_parser():
                         help='referit/unc/unc+/gref/gref_umd')
     parser.add_argument('--max_query_len', default=20, type=int,
                         help='maximum time steps (lang length) per batch')
+    parser.add_argument('--num_templates', default=10, type=int,
+                        help='number of templates in the support set')
     
     # dataset parameters
     parser.add_argument('--output_dir', default='./outputs',
