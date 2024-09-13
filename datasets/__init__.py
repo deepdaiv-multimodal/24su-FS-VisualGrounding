@@ -5,7 +5,9 @@ from torchvision.transforms import Compose, ToTensor, Normalize
 
 import datasets.transforms as T
 from .data_loader import GroundingDataset, GroundingDatasetCLIP
-from .custom_dataloader import SupportGroundingDataset #, SupportGroundingDatasetCLIP
+
+from .custom_dataset import YoloFewShotDataset
+from .custom_dataloader import collate_fn
 
 
 def make_transforms(args, image_set, is_onestage=False):
@@ -75,21 +77,14 @@ def build_dataset(split, args):
                                 transform=make_transforms(args, split),
                                 max_query_len=args.max_query_len)
         
-def build_support_dataset(split, args):
+def build_my_dataset(split, args):
     if args.model_type == "ResNet":
-        return SupportGroundingDataset(data_root=args.data_root,
-                            split_root=args.split_root,
-                            dataset=args.dataset,
-                            split=split,
-                            transform=make_transforms(args, split),
-                            max_query_len=args.max_query_len,
-                            num_templates=args.num_templates)
+        return YoloFewShotDataset(yaml_file=args.yaml_file,
+                                  transforms=make_transforms(args, split),
+                                  num_support_per_class=args.num_support_per_class)
     else:
-        raise NotImplementedError, "SupportGroundingDatasetCLIP is not implemented yet."
-        # return SupportGroundingDatasetCLIP(data_root=args.data_root,
-        #                         split_root=args.split_root,
-        #                         dataset=args.dataset,
-        #                         split=split,
-        #                         transform=make_transforms(args, split),
-        #                         max_query_len=args.max_query_len)
+        raise NotImplementedError("SupportGroundingDatasetCLIP is not implemented yet.")
+        # return YoloFewShotDatasetCLIP(yaml_file=args.yaml_file,
+        #                           transforms=make_transforms(args, split),
+        #                           num_support_per_class=args.num_support_per_class)
 

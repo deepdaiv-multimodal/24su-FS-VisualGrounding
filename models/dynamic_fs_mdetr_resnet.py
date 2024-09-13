@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import random
 
-from dynamic_mdetr_resnet import DynamicMDETR
+from .dynamic_mdetr_resnet import DynamicMDETR
 
 class DynamicFSMDETR(DynamicMDETR):
     def __init__(self, args):
@@ -13,7 +13,7 @@ class DynamicFSMDETR(DynamicMDETR):
         if args.pseudo_embedding:
             # PseudoEmbedding 클래스를 사용하여 learnable한 pseudo embedding 초기화
             assert args.hidden_dim == args.vl_hidden_dim, "Hidden dimension of the model and pseudo embedding should be the same."
-
+            self._init_pseudo_embedding()
             self._freeze_model_parameters()
 
     def _freeze_model_parameters(self):
@@ -24,50 +24,37 @@ class DynamicFSMDETR(DynamicMDETR):
             if ('pseudo_embedding' not in name) and ('init_sampling_feature') not in name and 'update_sampling_queries' not in name:
                 param.requires_grad = False
     
-    def _get_visual_prompts(self, templates, template_labels, hidden_dim):
+    def _init_pseudo_embedding(self):
         """
-        Initializes visual prompts for the pseudo-embedding module.
-
-        Args:
-            templates (torch.Tensor): Template images. Shape: (num_templates, 3, H, W)
-            template_labels (torch.Tensor): Labels associated with each template. Shape: (num_templates,)
-            hidden_dim (int): Dimension of the hidden layer.
-
-        Returns:
-            torch.Tensor: Visual prompts. Shape: (num_templates, hidden_dim)
+        Initializes the pseudo embedding.
         """
-        
         self.pseudo_embedding = PseudoEmbedding(self.pseudo_num_classes, self.hidden_dim)
-
-        # Initialize list to store visual prompts
-        visual_prompts = []
         
-        # Group templates by their labels
-        unique_labels = torch.unique(template_labels)
-        for label in unique_labels:
-            # Select templates corresponding to the current label
-            label_indices = (template_labels == label).nonzero(as_tuple=True)[0]
-            label_templates = templates[label_indices]
-
-            # Extract features for each template
-            for template in label_templates:
-                # Get the feature for the template using visumodel
-                template_feature, _ = self.visumodel(template.unsqueeze(0))
-                
-                # Apply average pooling to get feature size of (1, hidden_dim)
-                template_feature = F.adaptive_avg_pool2d(template_feature, (1, 1)).view(1, hidden_dim)
-
-                # Randomly select a pseudo embedding for the current label
-                pseudo_embedding_idx = random.randint(0, self.pseudo_embedding.embeddings.size(0) - 1)
-                pseudo_embedding = self.pseudo_embedding(torch.tensor([pseudo_embedding_idx]).to(template_feature.device))
-
-                # Add pseudo embedding to template feature
-                combined_feature = template_feature + pseudo_embedding
-
-                # Append the modified template feature to visual_prompts
-                visual_prompts.append(combined_feature)
-            
-        self.visual_prompts = torch.cat(visual_prompts, dim=0)  # Shape: (num_templates, hidden_dim)
+    def set_support_dataset(self, support_images, support_texts):
+        """
+        Sets the support dataset for the few-shot learning.
+        """
+        #TODO : support_images, support_texts를 이용하여 
+        # visual_features, language_features를 계산하고,
+        # pseudo embedding을 추가하여 multimodal prompts를 계산 
+        # # (B, N, C, H, W) -> (N, B, C, H, W)
+        # visual_features = self.visumodel(support_images)
+        # # (N, B, C, H, W) -> (N, B, H*W, C)
+        # visual_features = self.visu_proj(visual_features)
+        # # (N, B, H*W, C) -> (H*W, B, C)
+        # self.visual_prompts = visual_features.mean(dim=0)
+        
+        # language_features = self.textmodel(support_texts)
+        # language_features = self.text_proj(language_features)
+        # self.language_prompts = language_features.mean(dim=0)
+        
+        # concatenate visual and language prompts
+        self.visual_prompts = torch.cat([self.visual_prompts, self.language_prompts], dim=0)
+        
+        # add pseudo embeddings
+        if hasattr(self, 'pseudo_embedding'):
+            pseudo_embeddings = self.pseudo_embedding(torch.arange(self.pseudo_num_classes))
+            self.visual_prompts = torch.cat([self.visual_prompts, pseudo_embeddings], dim=0)
 
     def forward(self, img_data, text_data):
         bs = img_data.tensors.shape[0]

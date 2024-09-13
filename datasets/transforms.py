@@ -147,16 +147,17 @@ class RandomHorizontalFlip(object):
     def __call__(self, input_dict):
         if random.random() < 0.5:
             img = input_dict['img']
-            box = input_dict['box']
+            boxes = input_dict['box']
             text = input_dict['text']
 
             img = F.hflip(img)
             text = text.replace('right','*&^special^&*').replace('left','right').replace('*&^special^&*','left')
             h, w = img.height, img.width
-            box = box[[2, 1, 0, 3]] * torch.as_tensor([-1, 1, -1, 1]) + torch.as_tensor([w, 0, w, 0])
+            for box in boxes:
+                box = box[[2, 1, 0, 3]] * torch.as_tensor([-1, 1, -1, 1]) + torch.as_tensor([w, 0, w, 0])
 
             input_dict['img'] = img
-            input_dict['box'] = box
+            input_dict['box'] = boxes
             input_dict['text'] = text
 
         return input_dict
@@ -276,14 +277,14 @@ class NormalizeAndPad(object):
         input_dict['img'] = out_img
         input_dict['mask'] = out_mask
 
-        if 'box' in input_dict.keys():
-            box = input_dict['box']
-            box[0], box[2] = box[0]+left, box[2]+left
-            box[1], box[3] = box[1]+top, box[3]+top
-            h, w = out_img.shape[-2:]
-            box = xyxy2xywh(box)
-            box = box / torch.tensor([w, h, w, h], dtype=torch.float32)
-            input_dict['box'] = box
+        if 'boxes' in input_dict.keys():
+            for box in input_dict['boxes']:
+                box[0], box[2] = box[0]+left, box[2]+left
+                box[1], box[3] = box[1]+top, box[3]+top
+                h, w = out_img.shape[-2:]
+                box = xyxy2xywh(box)
+                box = box / torch.tensor([w, h, w, h], dtype=torch.float32)
+                input_dict['boxes'] = box
 
         return input_dict
 

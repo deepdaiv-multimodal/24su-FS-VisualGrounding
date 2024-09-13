@@ -9,6 +9,6 @@ roboflow:
   url: https://universe.roboflow.com/jskim-bjgcb/teenieping/dataset/1
   version: 1
   workspace: jskim-bjgcb
-test: ../test/images
-train: Teenieping-1/train/images
-val: Teenieping-1/valid/images
+test: ln_data/Teenieping/test
+train: ln_data/Teenieping/train
+val: ln_data/Teenieping/val

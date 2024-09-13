@@ -113,6 +113,8 @@ def get_args_parser():
                         help="Number of pseudo-classes")
 
     # Dataset parameters
+    parser.add_argument('--yaml_file', type=str, default='ln_data/Teenieping/data.yaml',
+                        help='path to yaml file')
     parser.add_argument('--data_root', type=str, default='/data1/shifengyuan/visual_grounding',
                         help='path to ReferIt splits data folder')
     parser.add_argument('--split_root', type=str, default='data',
@@ -121,8 +123,8 @@ def get_args_parser():
                         help='referit/unc/unc+/gref/gref_umd')
     parser.add_argument('--max_query_len', default=20, type=int,
                         help='maximum time steps (lang length) per batch')
-    parser.add_argument('--num_templates', default=10, type=int,
-                        help='number of templates in the support set')
+    parser.add_argument('--num_support_per_class', default=3, type=int,
+                        help='number of support images per class')
     
     # dataset parameters
     parser.add_argument('--output_dir', default='./outputs',
