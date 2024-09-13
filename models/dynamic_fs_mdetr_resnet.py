@@ -37,16 +37,27 @@ class DynamicFSMDETR(DynamicMDETR):
         #TODO : support_images, support_texts를 이용하여 
         # visual_features, language_features를 계산하고,
         # pseudo embedding을 추가하여 multimodal prompts를 계산 
-        # # (B, N, C, H, W) -> (N, B, C, H, W)
-        # visual_features = self.visumodel(support_images)
-        # # (N, B, C, H, W) -> (N, B, H*W, C)
-        # visual_features = self.visu_proj(visual_features)
-        # # (N, B, H*W, C) -> (H*W, B, C)
-        # self.visual_prompts = visual_features.mean(dim=0)
+        # (B, N, C, H, W) -> (B * N, C, H, W)
+        B, N, _, _, _ = support_images.size()
+        support_images = support_images.view(-1, *support_images.shape[2:])
+        visual_features, _ = self.visumodel(support_images)
+        visual_mask, visual_src = visual_features
+        visual_src = self.visu_proj(visual_src)
+        mean_visual_src = visual_src.mean(dim=0)
         
-        # language_features = self.textmodel(support_texts)
-        # language_features = self.text_proj(language_features)
-        # self.language_prompts = language_features.mean(dim=0)
+        # (B*N, d) -> (B, N, d)
+        visual_src = mean_visual_src.view(B, N, -1)
+        # (B, N, d) -> (B, d)
+        self.visual_feature = visual_src.mean(dim=1)
+        
+        
+        # (B, N, L) -> (B * N, L)
+        # TODO : Tokenizer를 이용하여 text 처리 후 textmodel에 넣어 language_features 계산
+        support_texts = support_texts.view(-1, *support_texts.shape[2:])
+        language_features = self.textmodel(support_texts)
+        language_src, language_mask = language_features.decompose()
+        language_mask = language_mask.flatten(1)
+        language_src = self.text_proj(language_src).permute(1, 0, 2)
         
         # concatenate visual and language prompts
         self.visual_prompts = torch.cat([self.visual_prompts, self.language_prompts], dim=0)
