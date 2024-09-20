@@ -30,42 +30,78 @@ class DynamicFSMDETR(DynamicMDETR):
         """
         self.pseudo_embedding = PseudoEmbedding(self.pseudo_num_classes, self.hidden_dim)
         
-    def set_support_dataset(self, support_images, support_texts):
+    def set_support_dataset(self, tem_imgs, tem_txts, category, tem_categories):
         """
         Sets the support dataset for the few-shot learning.
         """
-        #TODO : support_images, support_texts를 이용하여 
-        # visual_features, language_features를 계산하고,
-        # pseudo embedding을 추가하여 multimodal prompts를 계산 
+        # Category -> Index
+        category_idx = torch.tensor([self.category_to_idx[cat] for cat in category], device=tem_imgs.tensors.device)
+        
+        
+        # 1. Visual Encoder
+        B, N, _, _, _ = tem_imgs.size()
         # (B, N, C, H, W) -> (B * N, C, H, W)
-        B, N, _, _, _ = support_images.size()
-        support_images = support_images.view(-1, *support_images.shape[2:])
-        visual_features, _ = self.visumodel(support_images)
-        visual_mask, visual_src = visual_features
-        visual_src = self.visu_proj(visual_src)
-        mean_visual_src = visual_src.mean(dim=0)
+        tem_imgs = tem_imgs.view(-1, *tem_imgs.shape[2:])
+        # (B * N, C, H, W) -> (B * N, N_v, visual_num_channels)
+        # 여기서 Batch에 대해 반복문 안 돌리고 그냥 모델에 넣어도 될 듯?
+        tem_out, tem_visu_pos = self.visumodel(tem_imgs)
+        tem_visu_src, tem_visu_mask = tem_out
+        # (B * N, N_v, visual_num_channels) -> (B * N, N_v, hidden_dim)
+        tem_visu_src = self.visu_proj(tem_visu_src)
         
-        # (B*N, d) -> (B, N, d)
-        visual_src = mean_visual_src.view(B, N, -1)
-        # (B, N, d) -> (B, d)
-        self.visual_feature = visual_src.mean(dim=1)
+        # (B * N, N_v, hidden_dim) -> (B, N, N_v, hidden_dim)
+        visual_src = tem_visu_src.view(B, N, *tem_visu_src.shape[1:])
+        # Average pooling
+        # (B, N, N_v, hidden_dim) -> (B, N, hidden_dim)
+        visual_src = visual_src.mean(dim=2)
         
         
+        # 2. Language Encoder
+        B, N, L = tem_txts.size()
         # (B, N, L) -> (B * N, L)
-        # TODO : Tokenizer를 이용하여 text 처리 후 textmodel에 넣어 language_features 계산
-        support_texts = support_texts.view(-1, *support_texts.shape[2:])
-        language_features = self.textmodel(support_texts)
-        language_src, language_mask = language_features.decompose()
-        language_mask = language_mask.flatten(1)
-        language_src = self.text_proj(language_src).permute(1, 0, 2)
+        tem_txts = tem_txts.view(-1, *tem_txts.shape[2:])
+        
+        # (B * N, L) -> (B * N, L, text_num_channels)
+        tem_text_fea = self.textmodel(tem_txts)
+        tem_text_src, tem_text_mask = tem_text_fea.decompose()
+        
+        # (B * N, L, text_num_channels) -> (B * N, L, hidden_dim)
+        tem_text_src = self.text_proj(tem_text_src)
+        # (B * N, L, hidden_dim) -> (B, N, L, hidden_dim)
+        text_src = tem_text_src.view(B, N, *tem_text_src.shape[1:])
+        # Average pooling
+        # (B, N, L, hidden_dim) -> (B, N, hidden_dim)
+        text_src = text_src.mean(dim=2)
+        
         
         # concatenate visual and language prompts
-        self.visual_prompts = torch.cat([self.visual_prompts, self.language_prompts], dim=0)
+        # (B, N, hidden_dim) -> (B, N, 1, hidden_dim)
+        visual_src, text_src = visual_src.unsqueeze(2), text_src.unsqueeze(2)
         
-        # add pseudo embeddings
-        if hasattr(self, 'pseudo_embedding'):
-            pseudo_embeddings = self.pseudo_embedding(torch.arange(self.pseudo_num_classes))
-            self.visual_prompts = torch.cat([self.visual_prompts, pseudo_embeddings], dim=0)
+        # (B, N, 1, hidden_dim) -> (B, N, 2, hidden_dim)
+        vl_src = torch.cat([visual_src, text_src], dim=2)
+        
+        # Average pooling to dim 3
+        # (B, N, 2, hidden_dim) -> (B, N, hidden_dim)
+        vl_src = vl_src.mean(dim=2)
+        
+        assert vl_src.shape == (B, N, self.hidden_dim), \
+    f"vl_src shape should be {(B, N, self.hidden_dim)}, but got {vl_src.shape}"
+        
+        # Add pseudo embeddings
+        # Same Category -> Same Pseudo embedding
+        # the pseudo embedding should be learnable.
+        # Pseudo embedding is chosen randomly
+        pseudo_indexes = category_idx
+        # random matching
+        pseudo_indexes = torch.randint(0, self.pseudo_num_classes, (B,), device=tem_imgs.tensors.device)
+        pseudo_embeddings = self.pseudo_embedding(pseudo_indexes)
+        
+        # (B, N, hidden_dim) -> (B, N, hidden_dim)
+        multimodal_prompt = vl_src + pseudo_embeddings
+        
+        self.multimodal_prompt = multimodal_prompt
+        
 
     def forward(self, img_data, text_data):
         bs = img_data.tensors.shape[0]
@@ -118,9 +154,25 @@ class DynamicFSMDETR(DynamicMDETR):
             sampled_features, pe = self.feautures_sampling(sampling_query, reference_point, visu_feat.permute(1, 2, 0), v_pos.permute(1, 2, 0), i)
 
             # Text guided decoding with one-layer transformer encoder-decoder
+            
+            # Encoding : def encoding(self, src, src_mask, pos_embed):
+            # Decoding : def forward(self, tgt, memory, tgt_mask, memory_mask, pos_embed, query_pos):
+            '''
+            이 트랜스포머의 디코더에만 multimodal prompt 넣어줘야 하기 때문에 encoding과 decoding 따로 구현하였음.
+            '''
             if self.different_transformer:
-                vg_hs = self.vl_transformer[i](sampled_features, None, language_feat, pe, text_mask, l_pos)[0]
+                encoding_output = self.vl_transformer.encoding(sampled_features, None, pe)
+                # Language_feat : (max_len, B, hidden_dim)
+                # multimodal_prompt : (B, N, hidden_dim)
+                # concat -> (max_len + N, B, hidden_dim)
+                '''
+                Concat Multimodal Prompt Here !!!
+                '''
+                language_feat_with_prompt = torch.cat([language_feat, self.multimodal_prompt.unsqueeze(0).repeat(language_feat.size(0), 1, 1)], dim=0)
+                #
+                vg_hs = self.vl_transformer.decoding(language_feat_with_prompt, encoding_output, None, None, l_pos, None)[0]
             else:
+                raise NotImplementedError("Different Transformer is not implemented yet.")
                 vg_hs = self.vl_transformer(sampled_features, None, language_feat, pe, text_mask, l_pos)[0]
 
             # Prediction Head

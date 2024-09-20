@@ -373,6 +373,19 @@ class VLTransformer(nn.Module):
                           pos=pos_embed, query_pos=tgt_pos)
         # print(hs.shape, memory.shape)  # (target_len, bs, channel), (src_len, bs, channel)
         return hs, memory
+    
+
+    def encoding(self, src, src_mask, pos_embed):
+        src = src.permute(2, 0, 1)
+        pos_embed = pos_embed.permute(2, 0, 1)
+        memory = self.encoder(src, src_key_padding_mask=src_mask, pos=pos_embed)
+        return memory
+    
+    def decoding(self, tgt, memory, tgt_mask, src_mask, pos_embed, tgt_pos=None):
+        hs = self.decoder(tgt, memory,  tgt_key_padding_mask=tgt_mask, memory_key_padding_mask=src_mask,
+                          pos=pos_embed, query_pos=tgt_pos)
+        return hs
+    
 
 class TransformerEncoder(nn.Module):
 

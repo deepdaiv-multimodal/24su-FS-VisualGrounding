@@ -3,8 +3,27 @@ import random
 from PIL import Image
 import torch
 import torch.utils.data
-from torchvision import transforms
 
+from typing import List
+
+class CategorizedRefCOCO:
+    def __init__(self, 
+                 file_name: str, 
+                 sentences: List[str], 
+                 gt_bbox: List[float], 
+                 category: str, 
+                 pseudo_categories: List[str]):
+        self.file_name = file_name
+        self.sentences = sentences
+        self.gt_bbox = gt_bbox
+        self.category = category
+        self.pseudo_categories = pseudo_categories
+
+    def __str__(self):
+        #print all the attributes line by line
+        return '\n'.join([f'{key}: {value}' for key, value in self.__dict__.items()])
+    
+    
 class YoloFewShotDataset(torch.utils.data.Dataset):
     def __init__(self, yaml_file, transforms=None, num_support_per_class=4):
         """
