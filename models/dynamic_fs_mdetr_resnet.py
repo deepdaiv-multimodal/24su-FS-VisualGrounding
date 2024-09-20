@@ -154,25 +154,18 @@ class DynamicFSMDETR(DynamicMDETR):
             sampled_features, pe = self.feautures_sampling(sampling_query, reference_point, visu_feat.permute(1, 2, 0), v_pos.permute(1, 2, 0), i)
 
             # Text guided decoding with one-layer transformer encoder-decoder
+
+            # Language_feat : (max_len, B, hidden_dim)
+            # multimodal_prompt : (B, N, hidden_dim)
+            # concat -> (max_len + N, B, hidden_dim)
+            '''
+            Concat Multimodal Prompt & Language Feature Here !!!
+            '''
+            language_feat_with_prompt = torch.cat([language_feat, self.multimodal_prompt.unsqueeze(0).repeat(language_feat.size(0), 1, 1)], dim=0)
             
-            # Encoding : def encoding(self, src, src_mask, pos_embed):
-            # Decoding : def forward(self, tgt, memory, tgt_mask, memory_mask, pos_embed, query_pos):
-            '''
-            이 트랜스포머의 디코더에만 multimodal prompt 넣어줘야 하기 때문에 encoding과 decoding 따로 구현하였음.
-            '''
             if self.different_transformer:
-                encoding_output = self.vl_transformer.encoding(sampled_features, None, pe)
-                # Language_feat : (max_len, B, hidden_dim)
-                # multimodal_prompt : (B, N, hidden_dim)
-                # concat -> (max_len + N, B, hidden_dim)
-                '''
-                Concat Multimodal Prompt Here !!!
-                '''
-                language_feat_with_prompt = torch.cat([language_feat, self.multimodal_prompt.unsqueeze(0).repeat(language_feat.size(0), 1, 1)], dim=0)
-                #
-                vg_hs = self.vl_transformer.decoding(language_feat_with_prompt, encoding_output, None, None, l_pos, None)[0]
+                vg_hs = self.vl_transformer[i](sampled_features, None, language_feat_with_prompt, pe, text_mask, l_pos)[0]
             else:
-                raise NotImplementedError("Different Transformer is not implemented yet.")
                 vg_hs = self.vl_transformer(sampled_features, None, language_feat, pe, text_mask, l_pos)[0]
 
             # Prediction Head
