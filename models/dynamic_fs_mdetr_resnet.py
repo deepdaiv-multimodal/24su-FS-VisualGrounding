@@ -5,11 +5,22 @@ import random
 
 from .dynamic_mdetr_resnet import DynamicMDETR
 
+def load_category_mapping(file_path):
+      """Load category mapping from a text file."""
+      with open(file_path, 'r') as f:
+          categories = f.read().splitlines()
+      category_to_idx = {category: idx for idx, category in enumerate(categories)}
+      return category_to_idx, categories
+
 class DynamicFSMDETR(DynamicMDETR):
     def __init__(self, args):
         super(DynamicFSMDETR, self).__init__(args)
         self.pseudo_num_classes = args.pseudo_num_classes
         self.hidden_dim = args.hidden_dim
+        category_file_path = args.category_file_path
+        
+        self.category_to_idx, self.categories = load_category_mapping(category_file_path)
+        
         if args.pseudo_embedding:
             # PseudoEmbedding 클래스를 사용하여 learnable한 pseudo embedding 초기화
             assert args.hidden_dim == args.vl_hidden_dim, "Hidden dimension of the model and pseudo embedding should be the same."

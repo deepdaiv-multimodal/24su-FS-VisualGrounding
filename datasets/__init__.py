@@ -6,7 +6,7 @@ from torchvision.transforms import Compose, ToTensor, Normalize
 import datasets.transforms as T
 from .data_loader import GroundingDataset, GroundingDatasetCLIP
 
-from .custom_dataset import YoloFewShotDataset
+from .custom_dataset import FSGroundingDataset
 from .custom_dataloader import collate_fn
 
 

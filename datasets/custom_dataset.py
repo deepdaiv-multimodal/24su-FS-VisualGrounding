@@ -2,7 +2,7 @@ import os
 import random
 from PIL import Image
 import torch
-import torch.utils.data
+from torch.utils.data import Dataset
 
 from typing import List
 
@@ -23,11 +23,101 @@ class CategorizedRefCOCO:
         #print all the attributes line by line
         return '\n'.join([f'{key}: {value}' for key, value in self.__dict__.items()])
     
-    
-class YoloFewShotDataset(torch.utils.data.Dataset):
-    def __init__(self, yaml_file, transforms=None, num_support_per_class=4):
+
+class FSGroundingDataset(Dataset):
+    def __init__(self, data_dict, transform=None, num_support_per_class=5, num_support_categories=10):
+        self.class_names = data_dict['names']  # Class names list
+        self.num_classes = len(self.class_names)
+        train_dir = data_dict['train']  # Directory for training images and labels
+        self.img_dir = os.path.join(train_dir, 'images')
+        self.label_dir = os.path.join(train_dir, 'labels')
+        self.transform = transform
+        self.num_support_per_class = num_support_per_class
+
+        # List to store all objects across images
+        self.all_objects = []
+        self.class_objects = {i: [] for i in range(self.num_classes)}  # Objects grouped by class
+
+        # Load data from image and label files
+        self._load_data()
+
+        # Assert that each class has enough support objects
+        assert all(len(objs) >= num_support_per_class for objs in self.class_objects.values())
+
+    def _load_data(self):
         """
-        YOLO 포맷에 맞춘 few-shot 학습용 데이터셋 클래스.
+        Load all objects from images and label files.
+        """
+        for img_file in sorted(os.listdir(self.img_dir)):
+            if img_file.endswith('.jpg') or img_file.endswith('.png'):
+                label_file = os.path.splitext(img_file)[0] + '.txt'
+                label_path = os.path.join(self.label_dir, label_file)
+
+                # Only process if the label file exists
+                if os.path.exists(label_path):
+                    with open(label_path, 'r') as f:
+                        lines = f.readlines()
+                        for idx, line in enumerate(lines):
+                            class_id = int(line.split()[0])
+                            if class_id < self.num_classes:
+                                obj = {
+                                    'img_file': img_file,
+                                    'class_id': class_id,
+                                    'bbox_line': line.strip(),  # The label file line for this object
+                                    'object_idx': idx  # Object index within the image
+                                }
+                                self.all_objects.append(obj)
+                                self.class_objects[class_id].append(obj)
+
+    def _create_support_dict(self, obj):
+        """
+        Create a support dictionary for a given object, cropping the object region.
+        """
+        img_file = obj['img_file']
+        bbox_line = obj['bbox_line']
+        class_id = obj['class_id']
+
+        img_path = os.path.join(self.img_dir, img_file)
+        image = Image.open(img_path).convert('RGB')
+
+        # Extract the bounding box coordinates from the YOLO format
+        parts = bbox_line.split()
+        bbox = list(map(float, parts[1:]))  # [x_center, y_center, width, height]
+
+        # Convert YOLO bbox to image coordinates
+        img_w, img_h = image.size
+        x_center, y_center, width, height = bbox
+        left = (x_center - width / 2) * img_w
+        top = (y_center - height / 2) * img_h
+        right = (x_center + width / 2) * img_w
+        bottom = (y_center + height / 2) * img_h
+
+        # Crop the bounding box region
+        cropped_image = image.crop((left, top, right, bottom))
+
+        # Apply any transformation if provided
+        if self.transform:
+            cropped_image = self.transform(cropped_image)
+
+        support_dict = {
+            'text': self.class_names[class_id],  # Class name as text
+            'img': cropped_image  # Cropped object image (PIL Image)
+        }
+
+        return support_dict
+
+    def __len__(self):
+        return len(self.all_objects)
+
+    def __getitem__(self, idx):
+        obj = self.all_objects[idx]
+        support_dict = self._create_support_dict(obj)
+        return support_dict
+
+class FewShotDataset(Dataset):
+    def __init__(self, yaml_file, transforms=None, num_support_per_class=4, num_support_categories=10):
+        """
+        Few-shot 학습용 데이터셋 클래스.
         :param yaml_file: 데이터셋 구성을 정의한 yaml 파일 경로
         :param transforms: 이미지 변환을 위한 torchvision transforms
         :param num_support_per_class: 각 클래스당 지원 이미지를 몇 개 불러올지 지정

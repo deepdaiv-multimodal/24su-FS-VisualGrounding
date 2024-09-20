@@ -125,6 +125,10 @@ def get_args_parser():
                         help='maximum time steps (lang length) per batch')
     parser.add_argument('--num_support_per_class', default=3, type=int,
                         help='number of support images per class')
+    parser.add_argument('--num_support_categories', default=5, type=int,
+                        help='number of support categories')
+    parser.add_argument('--category_file_path', default = 'GroundVLP/coco_80.txt', type=str,
+                        help='path to category file')    
     
     # dataset parameters
     parser.add_argument('--output_dir', default='./outputs',
